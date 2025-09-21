@@ -40,10 +40,14 @@ cd repo-275-voice-bot
 pip install -r requirements.txt
 ```
 
-**Note for Windows users**: If you encounter issues with PyAudio installation, you may need to install it separately:
-```bash
-pip install pipwin
-pipwin install pyaudio
+**Note for Windows/Conda users**: PyAudio wheels are now available for Python 3.8–3.12. If you still hit build errors, try:
+```cmd
+pip install --upgrade pip wheel setuptools
+pip install pyaudio==0.2.14
+```
+If using Conda/Anaconda and the above fails, try Conda-forge:
+```cmd
+conda install -c conda-forge pyaudio
 ```
 
 ### Step 3: Get Your Gemini API Key
@@ -156,9 +160,14 @@ The bot is pre-configured with professional context about:
 - Ensure you haven't exceeded API rate limits
 
 **PyAudio installation issues:**
-- On Windows: Use `pipwin install pyaudio`
+- On Windows: `pip install pyaudio==0.2.14` (prebuilt wheel)
 - On macOS: Install with `brew install portaudio` then `pip install pyaudio`
 - On Linux: Install with `sudo apt-get install python3-pyaudio`
+
+If you see `Cannot open include file: 'portaudio.h'`, it means pip is trying to build from source. Use the wheel (`pyaudio==0.2.14`) or install via Conda.
+
+**Invisible text in inputs/messages:**
+- This build ships with higher-contrast styles. If you still see low contrast, try switching Streamlit theme to Light in the settings or clear browser cache.
 
 **Speech recognition not working:**
 - Check your internet connection
