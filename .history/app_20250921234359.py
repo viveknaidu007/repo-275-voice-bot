@@ -316,14 +316,6 @@ pip install pyaudio==0.2.14
                 else:
                     st.info("🎙️ Voice session active. Click End to stop.")
 
-            # Show the latest bot response (always visible below voice input)
-            if st.session_state.last_bot_response:
-                st.markdown("**Latest Response:**")
-                st.markdown(
-                    f'<div class="bot-message">{st.session_state.last_bot_response}</div>',
-                    unsafe_allow_html=True
-                )
-
         # Continuous voice loop: run one cycle per rerun while active
         if st.session_state.voice_active and not st.session_state.voice_processing:
             try:
@@ -411,9 +403,6 @@ pip install pyaudio==0.2.14
                         "content": response,
                         "ts": datetime.now().strftime("%H:%M:%S")
                     })
-                    # Always speak responses
-                    st.session_state.last_bot_response = response
-                    st.session_state.voice_bot.speak_text(response)
                 
                 st.rerun()
         
@@ -512,9 +501,6 @@ pip install pyaudio==0.2.14
                         "content": response,
                         "ts": datetime.now().strftime("%H:%M:%S")
                     })
-                    # Always speak responses
-                    st.session_state.last_bot_response = response
-                    st.session_state.voice_bot.speak_text(response)
                 
                 st.rerun()
 
