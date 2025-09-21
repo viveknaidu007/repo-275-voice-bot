@@ -171,7 +171,7 @@ class VoiceBot:
             convo_lines = []
             history = st.session_state.get('chat_history', [])[-6:]
             for msg in history:
-                role = 'Interviewer' if msg.get('role') == 'user' else 'Candidate'
+                role = 'User' if msg.get('role') == 'user' else 'bot'
                 convo_lines.append(f"{role}: {msg.get('content','')}")
             convo = "\n".join(convo_lines)
             prompt = (
@@ -365,7 +365,7 @@ pip install pyaudio==0.2.14
         # Text input section
         st.markdown("### ⌨️ Text Input")
         text_question = st.text_area(
-            "Type your interview question:",
+            "Type your questions:",
             placeholder="e.g., What should we know about your life story in a few sentences?",
             height=100
         )
@@ -425,7 +425,7 @@ pip install pyaudio==0.2.14
 
         # All conversation
         st.markdown("### 💭 Conversation History (All)")
-        render_history(st.session_state.chat_history, "👋 Start the conversation by asking an interview question!")
+        render_history(st.session_state.chat_history, "👋 Start the conversation by asking an question")
 
         # Split sections
         st.markdown("### 🎙️ Voice Conversation History")

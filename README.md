@@ -81,7 +81,7 @@ The application will open in your default web browser at `http://localhost:8501`
 ### Text Interaction
 1. Type your question in the text area
 2. Click "📤 Send Question"
-3. The bot will respond with text (you can enable voice response)
+3. The bot will respond with text 
 
 ### Sample Questions
 The application includes pre-loaded sample questions such as:
@@ -105,7 +105,7 @@ The application includes pre-loaded sample questions such as:
 1. **Audio Capture**: Uses PyAudio to capture microphone input
 2. **Speech-to-Text**: Google Speech Recognition converts audio to text
 3. **AI Processing**: Gemini AI generates contextual responses
-4. **Text-to-Speech**: pyttsx3 converts responses back to audio
+
 
 ### AI Context Configuration
 The bot is pre-configured with professional context about:
@@ -166,13 +166,6 @@ The bot is pre-configured with professional context about:
 
 If you see `Cannot open include file: 'portaudio.h'`, it means pip is trying to build from source. Use the wheel (`pyaudio==0.2.14`) or install via Conda.
 
-**Invisible text in inputs/messages:**
-- This build ships with higher-contrast styles. If you still see low contrast, try switching Streamlit theme to Light in the settings or clear browser cache.
-
-**Speech recognition not working:**
-- Check your internet connection
-- Speak clearly and at a moderate pace
-- Ensure minimal background noise
 
 ---
 
