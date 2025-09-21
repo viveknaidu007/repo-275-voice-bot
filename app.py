@@ -1,6 +1,5 @@
 import streamlit as st
 import speech_recognition as sr
-import pyttsx3
 import google.generativeai as genai
 from dotenv import load_dotenv
 import os
@@ -95,7 +94,7 @@ class VoiceBot:
         self.recognizer = sr.Recognizer()
         # Microphone and TTS can fail if drivers or audio stack aren't available (e.g., PyAudio issues)
         self.has_microphone = False
-        self.tts_engine = None
+        self.tts_available = True
         try:
             # Probe microphone availability without keeping a persistent context
             with sr.Microphone() as _:
@@ -103,30 +102,8 @@ class VoiceBot:
         except Exception as e:
             self.has_microphone = False
             st.warning(f"Microphone setup failed. Voice input will be disabled. Details: {e}")
-        try:
-            self.tts_engine = pyttsx3.init()
-        except Exception as e:
-            st.warning(f"Text-to-Speech setup failed. Audio responses will be disabled. Details: {e}")
-        self.setup_tts()
         self.setup_gemini()
         
-    def setup_tts(self):
-        """Configure text-to-speech engine"""
-        if not self.tts_engine:
-            return
-        voices = self.tts_engine.getProperty('voices')
-        if voices:
-            # Try to use a female voice if available
-            for voice in voices:
-                if 'female' in voice.name.lower() or 'zira' in voice.name.lower():
-                    self.tts_engine.setProperty('voice', voice.id)
-                    break
-            else:
-                self.tts_engine.setProperty('voice', voices[0].id)
-
-        self.tts_engine.setProperty('rate', 180)  # Speed of speech
-        self.tts_engine.setProperty('volume', 0.8)  # Volume level
-    
     def setup_gemini(self):
         """Configure Gemini API"""
         api_key = os.getenv('GEMINI_API_KEY')
@@ -213,11 +190,18 @@ class VoiceBot:
     def speak_text(self, text: str):
         """Convert text to speech"""
         try:
-            if not self.tts_engine:
-                st.info("TTS unavailable. Skipping audio playback.")
+            if not text:
                 return
-            self.tts_engine.say(text)
-            self.tts_engine.runAndWait()
+            from gtts import gTTS
+            tts = gTTS(text=text, lang='en')
+            audio_bytes = io.BytesIO()
+            tts.write_to_fp(audio_bytes)
+            audio_bytes.seek(0)
+            st.session_state.audio_to_play = audio_bytes.getvalue()
+            # Estimate speaking time: roughly 200 words per minute, so about 3.33 words per second
+            words = len(text.split())
+            estimated_time = words / 3.33
+            time.sleep(estimated_time + 1)  # add 1 second buffer
         except Exception as e:
             st.error(f"Text-to-speech error: {e}")
 
@@ -249,9 +233,9 @@ def main():
     
     # Sidebar
     with st.sidebar:
-        st.header("🎯 Interview Voice Bot")
+        st.header("🎯 Voice Bot")
         st.markdown("""
-        This voice bot is designed to answer interview questions as the job applicant.
+        This voice bot is designed to answer questions.
         
         **How to use:**
         1. Click 'Start Voice Input' to speak your question
@@ -323,6 +307,8 @@ pip install pyaudio==0.2.14
                     f'<div class="bot-message">{st.session_state.last_bot_response}</div>',
                     unsafe_allow_html=True
                 )
+                if 'audio_to_play' in st.session_state:
+                    st.audio(st.session_state.audio_to_play, format='audio/mp3')
 
         # Continuous voice loop: run one cycle per rerun while active
         if st.session_state.voice_active and not st.session_state.voice_processing:
@@ -428,11 +414,11 @@ pip install pyaudio==0.2.14
                 time_str = f" ({ts})" if ts else ""
                 if message.get("role") == "user":
                     parts.append(
-                        f'<div class="user-message"><strong>🧑 Interviewer{time_str}:</strong> {message.get("content","")}</div>'
+                        f'<div class="user-message"><strong>🧑 User{time_str}:</strong> {message.get("content","")}</div>'
                     )
                 else:
                     parts.append(
-                        f'<div class="bot-message"><strong>🤖 Candidate{time_str}:</strong> {message.get("content","")}</div>'
+                        f'<div class="bot-message"><strong>🤖 Bot{time_str}:</strong> {message.get("content","")}</div>'
                     )
             parts.append('</div>')
             st.markdown("".join(parts), unsafe_allow_html=True)
@@ -461,7 +447,6 @@ pip install pyaudio==0.2.14
         - Uses Google Speech Recognition
         - Powered by Gemini AI
         - Text-to-speech for audio responses
-        - Designed for 100x AI Agent Team interview
         """)
         
         # Status indicator
