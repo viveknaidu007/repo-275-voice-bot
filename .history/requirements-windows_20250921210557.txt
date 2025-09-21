@@ -1,0 +1,16 @@
+# Windows-specific requirements (for local development)
+streamlit==1.28.1
+google-generativeai==0.3.2
+SpeechRecognition==3.10.0
+pyttsx3==2.90
+python-dotenv==1.0.0
+streamlit-webrtc==0.47.1
+av==10.0.0
+numpy==1.24.3
+streamlit-audio-recorder==0.0.8
+websockets==11.0.3
+
+# Install PyAudio manually on Windows:
+# Method 1: pip install https://files.pythonhosted.org/packages/c7/c0/13e70b279d6de7b76970bf2d69baae75c9f8e4bf35d4a89c50c8d24a18c3/PyAudio-0.2.11-cp310-cp310-win_amd64.whl
+# Method 2: conda install pyaudio
+# Method 3: Use Windows Subsystem for Linux (WSL)

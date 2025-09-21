@@ -1,9 +1,15 @@
 import streamlit as st
 import speech_recognition as sr
+import tempfile
+import wave
+import numpy as np
 import google.generativeai as genai
 import os
 from dotenv import load_dotenv
 import pyttsx3
+import sounddevice as sd
+import threading
+import time
 
 # Load environment variables
 load_dotenv()
@@ -60,7 +66,14 @@ class VoiceBot:
     def _check_microphone(self):
         """Check if microphone is available."""
         try:
-            # Test speech_recognition microphone access
+            # Test sounddevice
+            devices = sd.query_devices()
+            input_devices = [d for d in devices if d['max_input_channels'] > 0]
+            if input_devices:
+                self.microphone_method = 'sounddevice'
+                return True
+            
+            # Fallback to speech_recognition
             with sr.Microphone() as source:
                 pass
             self.microphone_method = 'speech_recognition'
@@ -68,6 +81,55 @@ class VoiceBot:
         except Exception as e:
             st.error(f"❌ Microphone error: {str(e)}")
             return False
+    
+    def listen_with_sounddevice(self, duration=5):
+        """Record audio using sounddevice for better compatibility."""
+        try:
+            sample_rate = 44100
+            channels = 1
+            
+            st.info(f"🎤 Recording for {duration} seconds...")
+            
+            # Record audio
+            audio_data = sd.rec(int(duration * sample_rate), 
+                              samplerate=sample_rate, 
+                              channels=channels, 
+                              dtype=np.float32)
+            sd.wait()  # Wait until recording is finished
+            
+            # Convert to 16-bit PCM
+            audio_data = (audio_data * 32767).astype(np.int16)
+            
+            # Save to temporary WAV file
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
+                with wave.open(temp_file.name, 'wb') as wav_file:
+                    wav_file.setnchannels(channels)
+                    wav_file.setsampwidth(2)  # 16-bit
+                    wav_file.setframerate(sample_rate)
+                    wav_file.writeframes(audio_data.tobytes())
+                
+                # Process with speech recognition
+                with sr.AudioFile(temp_file.name) as source:
+                    audio = self.recognizer.record(source)
+                    try:
+                        text = self.recognizer.recognize_google(audio)
+                        return text
+                    except sr.UnknownValueError:
+                        st.error("❌ Could not understand audio")
+                        return None
+                    except sr.RequestError as e:
+                        st.error(f"❌ Speech recognition error: {e}")
+                        return None
+                    finally:
+                        # Clean up temp file
+                        try:
+                            os.unlink(temp_file.name)
+                        except:
+                            pass
+        
+        except Exception as e:
+            st.error(f"❌ Recording error: {str(e)}")
+            return None
     
     def check_microphone_permissions(self):
         """Check and request microphone permissions."""
@@ -123,13 +185,23 @@ class VoiceBot:
             st.warning("💡 Tip: Make sure your microphone is connected and browser has permission")
             return None
     
-    def start_recording_session(self):
-        """Start a recording session - just sets the flag."""
-        return True
+    def start_simple_recording(self):
+        """Start a simple recording session - this is just a flag."""
+        try:
+            # Simple flag-based approach
+            return True
+        except Exception as e:
+            st.error(f"❌ Failed to start recording: {str(e)}")
+            return False
     
-    def process_voice_recording(self):
-        """Process voice recording with proper microphone handling."""
-        return self.listen_with_microphone(duration=10)  # 10 second max recording
+    def stop_simple_recording(self):
+        """Stop recording and process - using the timeout method."""
+        try:
+            # Use the reliable timeout-based recording method
+            return self.listen_with_timeout(max_duration=8)  # 8 second max recording
+        except Exception as e:
+            st.error(f"❌ Recording processing error: {str(e)}")
+            return None
     
     def generate_response(self, question):
         """Generate response using Gemini API."""
@@ -261,6 +333,9 @@ def main():
     if 'voice_bot' not in st.session_state:
         st.session_state.voice_bot = VoiceBot()
     
+    if 'is_recording' not in st.session_state:
+        st.session_state.is_recording = False
+    
     if 'main_text_input' not in st.session_state:
         st.session_state.main_text_input = ""
     
@@ -329,25 +404,36 @@ def main():
         
         with voice_col:
             st.markdown("<br>", unsafe_allow_html=True)
-            # Professional voice recording button
-            if st.button("🎤 Record Voice", key="voice_record", use_container_width=True, help="Click to record your interview question"):
-                # Process voice recording immediately
-                with st.spinner("🎤 Initializing microphone..."):
-                    question = st.session_state.voice_bot.process_voice_recording()
+            # Voice recording toggle button - ChatGPT style
+            if not st.session_state.is_recording:
+                if st.button("🎤 Start", key="start_rec", use_container_width=True, help="Start voice recording"):
+                    st.session_state.is_recording = True
+                    # Start simple recording
+                    success = st.session_state.voice_bot.start_simple_recording()
+                    if not success:
+                        st.session_state.is_recording = False
+                    st.rerun()
+            else:
+                if st.button("⏹️ Stop", key="stop_rec", use_container_width=True, help="Stop recording and process"):
+                    st.session_state.is_recording = False
                     
-                    if question:
-                        st.success(f"📝 Voice captured: \"{question}\"")
-                        # Add user question to chat
-                        st.session_state.chat_history.append({"role": "user", "content": question})
+                    # Process voice recording
+                    with st.spinner("🎤 Processing your voice..."):
+                        question = st.session_state.voice_bot.stop_simple_recording()
                         
-                        # Generate AI response
-                        with st.spinner("🤔 Generating response..."):
-                            response = st.session_state.voice_bot.generate_response(question)
-                            st.session_state.chat_history.append({"role": "assistant", "content": response})
-                        
-                        st.rerun()
-                    else:
-                        st.error("❌ Voice recording failed. Please try again or use text input.")
+                        if question:
+                            st.success(f"📝 Voice captured: {question}")
+                            # Add user question to chat
+                            st.session_state.chat_history.append({"role": "user", "content": question})
+                            
+                            # Generate AI response
+                            with st.spinner("🤔 Thinking and generating response..."):
+                                response = st.session_state.voice_bot.generate_response(question)
+                                st.session_state.chat_history.append({"role": "assistant", "content": response})
+                            
+                            st.rerun()
+                        else:
+                            st.error("❌ Could not capture voice. Please try again.")
         
         with send_col:
             st.markdown("<br>", unsafe_allow_html=True)
@@ -367,6 +453,15 @@ def main():
                     st.rerun()
         
         st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Recording status indicator
+        if st.session_state.is_recording:
+            st.markdown('''
+            <div class="recording-indicator">
+                🎤 <strong>READY TO RECORD...</strong><br>
+                <small>Click "Stop" to start recording (max 8 seconds)</small>
+            </div>
+            ''', unsafe_allow_html=True)
     
     with sidebar_col:
         st.markdown("## 📋 Interview Helper")
@@ -377,40 +472,18 @@ def main():
         else:
             st.error("❌ Microphone Not Available")
         
-        # Microphone test button
-        if st.button("🔧 Test Microphone", key="test_mic", use_container_width=True):
-            with st.spinner("Testing microphone access..."):
-                if st.session_state.voice_bot.check_microphone_permissions():
-                    st.success("🎤 Microphone test successful!")
-                    st.session_state.voice_bot.microphone_available = True
-                else:
-                    st.error("❌ Microphone test failed")
-                    st.session_state.voice_bot.microphone_available = False
-        
         st.markdown("### 🎯 How to Use:")
         st.markdown("""
-        **🎤 Voice Input**: 
-        - Click "Record Voice" button
-        - Allow microphone permission when prompted
-        - Speak your question clearly (max 10 seconds)
-        - AI will process and respond
+        **Voice Input**: 
+        - Click "Start" → Speak clearly → Click "Stop"
+        - Max 8 seconds recording per session
         
-        **⌨️ Text Input**: 
-        - Type your question in the text area
-        - Click "Send" to get response
+        **Text Input**: 
+        - Type question → Click "Send"
         
-        **⚡ Quick Start**: 
-        - Use sample questions below for testing
+        **Quick Start**: 
+        - Use sample questions below
         """)
-        
-        # Microphone permission notice
-        if not st.session_state.voice_bot.microphone_available:
-            st.warning("""
-            **📢 Microphone Setup Required:**
-            1. Allow microphone access when prompted by your browser
-            2. Check system microphone settings
-            3. Refresh the page if needed
-            """)
         
         st.markdown("### 💡 Sample Questions:")
         sample_questions = [

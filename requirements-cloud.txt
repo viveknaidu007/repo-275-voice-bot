@@ -1,0 +1,13 @@
+# Cloud deployment requirements (no PyAudio)
+streamlit==1.28.1
+google-generativeai==0.3.2
+SpeechRecognition==3.10.0
+python-dotenv==1.0.0
+streamlit-webrtc==0.47.1
+av==10.0.0
+numpy==1.24.3
+streamlit-audio-recorder==0.0.8
+websockets==11.0.3
+
+# Note: pyttsx3 is excluded for cloud deployment as it requires system audio drivers
+# TTS functionality will be disabled in cloud environments

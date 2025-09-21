@@ -1,9 +1,15 @@
 import streamlit as st
 import speech_recognition as sr
+import tempfile
+import wave
+import numpy as np
 import google.generativeai as genai
 import os
 from dotenv import load_dotenv
 import pyttsx3
+import sounddevice as sd
+import threading
+import time
 
 # Load environment variables
 load_dotenv()
@@ -60,7 +66,14 @@ class VoiceBot:
     def _check_microphone(self):
         """Check if microphone is available."""
         try:
-            # Test speech_recognition microphone access
+            # Test sounddevice
+            devices = sd.query_devices()
+            input_devices = [d for d in devices if d['max_input_channels'] > 0]
+            if input_devices:
+                self.microphone_method = 'sounddevice'
+                return True
+            
+            # Fallback to speech_recognition
             with sr.Microphone() as source:
                 pass
             self.microphone_method = 'speech_recognition'
@@ -68,6 +81,55 @@ class VoiceBot:
         except Exception as e:
             st.error(f"❌ Microphone error: {str(e)}")
             return False
+    
+    def listen_with_sounddevice(self, duration=5):
+        """Record audio using sounddevice for better compatibility."""
+        try:
+            sample_rate = 44100
+            channels = 1
+            
+            st.info(f"🎤 Recording for {duration} seconds...")
+            
+            # Record audio
+            audio_data = sd.rec(int(duration * sample_rate), 
+                              samplerate=sample_rate, 
+                              channels=channels, 
+                              dtype=np.float32)
+            sd.wait()  # Wait until recording is finished
+            
+            # Convert to 16-bit PCM
+            audio_data = (audio_data * 32767).astype(np.int16)
+            
+            # Save to temporary WAV file
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
+                with wave.open(temp_file.name, 'wb') as wav_file:
+                    wav_file.setnchannels(channels)
+                    wav_file.setsampwidth(2)  # 16-bit
+                    wav_file.setframerate(sample_rate)
+                    wav_file.writeframes(audio_data.tobytes())
+                
+                # Process with speech recognition
+                with sr.AudioFile(temp_file.name) as source:
+                    audio = self.recognizer.record(source)
+                    try:
+                        text = self.recognizer.recognize_google(audio)
+                        return text
+                    except sr.UnknownValueError:
+                        st.error("❌ Could not understand audio")
+                        return None
+                    except sr.RequestError as e:
+                        st.error(f"❌ Speech recognition error: {e}")
+                        return None
+                    finally:
+                        # Clean up temp file
+                        try:
+                            os.unlink(temp_file.name)
+                        except:
+                            pass
+        
+        except Exception as e:
+            st.error(f"❌ Recording error: {str(e)}")
+            return None
     
     def check_microphone_permissions(self):
         """Check and request microphone permissions."""
@@ -261,6 +323,9 @@ def main():
     if 'voice_bot' not in st.session_state:
         st.session_state.voice_bot = VoiceBot()
     
+    if 'is_recording' not in st.session_state:
+        st.session_state.is_recording = False
+    
     if 'main_text_input' not in st.session_state:
         st.session_state.main_text_input = ""
     
@@ -377,40 +442,18 @@ def main():
         else:
             st.error("❌ Microphone Not Available")
         
-        # Microphone test button
-        if st.button("🔧 Test Microphone", key="test_mic", use_container_width=True):
-            with st.spinner("Testing microphone access..."):
-                if st.session_state.voice_bot.check_microphone_permissions():
-                    st.success("🎤 Microphone test successful!")
-                    st.session_state.voice_bot.microphone_available = True
-                else:
-                    st.error("❌ Microphone test failed")
-                    st.session_state.voice_bot.microphone_available = False
-        
         st.markdown("### 🎯 How to Use:")
         st.markdown("""
-        **🎤 Voice Input**: 
-        - Click "Record Voice" button
-        - Allow microphone permission when prompted
-        - Speak your question clearly (max 10 seconds)
-        - AI will process and respond
+        **Voice Input**: 
+        - Click "Start" → Speak clearly → Click "Stop"
+        - Max 8 seconds recording per session
         
-        **⌨️ Text Input**: 
-        - Type your question in the text area
-        - Click "Send" to get response
+        **Text Input**: 
+        - Type question → Click "Send"
         
-        **⚡ Quick Start**: 
-        - Use sample questions below for testing
+        **Quick Start**: 
+        - Use sample questions below
         """)
-        
-        # Microphone permission notice
-        if not st.session_state.voice_bot.microphone_available:
-            st.warning("""
-            **📢 Microphone Setup Required:**
-            1. Allow microphone access when prompted by your browser
-            2. Check system microphone settings
-            3. Refresh the page if needed
-            """)
         
         st.markdown("### 💡 Sample Questions:")
         sample_questions = [
